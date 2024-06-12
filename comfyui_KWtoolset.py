@@ -12,6 +12,7 @@ from .sd_prompt_reader.constants import SUPPORTED_FORMATS
 from .sd_prompt_reader.image_data_reader import ImageDataReader
 import re
 import cv2
+import logging
 
 from PIL import Image
 from matplotlib import cm
@@ -1091,3 +1092,54 @@ class KwtoolsetChangeOpenpose:
     def solid(self, value, width, height):
         out = torch.full((1, 3, height, width), value, dtype=torch.float32, device="cpu")
         return (out,)
+
+
+
+
+
+@torch.no_grad()
+def match_normalize(target_tensor, source_tensor, strength=1.0, dimensions=4):
+    "Adjust target_tensor based on source_tensor's mean and stddev"   
+    if len(target_tensor.shape) != dimensions:
+        raise ValueError("source_latent must have four dimensions")
+    if len(source_tensor.shape) != dimensions:
+        raise ValueError("target_latent must have four dimensions")
+
+    # Put everything on the same device
+    device = target_tensor.device
+
+    # Calculate the mean and std of target tensor
+    tgt_mean = target_tensor.mean(dim=[2, 3], keepdim=True).to(device)
+    tgt_std = target_tensor.std(dim=[2, 3], keepdim=True).to(device)
+    
+    # Calculate the mean and std of source tensor
+    src_mean = source_tensor.mean(dim=[2, 3], keepdim=True).to(device)
+    src_std = source_tensor.std(dim=[2, 3], keepdim=True).to(device)
+    
+    # Normalize target tensor to have mean=0 and std=1, then rescale with strength adjustment
+    normalized_tensor = (target_tensor.clone() - tgt_mean) / tgt_std * src_std + src_mean
+    adjusted_tensor = target_tensor + strength * (normalized_tensor - target_tensor)
+    
+    return adjusted_tensor
+
+
+@register_node("LatentMatch", "KW Latent Match")
+class LatentMatch:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {"required":
+                    {"source_latent": ("LATENT", ),
+                     "target_latent": ("LATENT", ),
+                     "strength": ("FLOAT", {"default": 1.0, "min": 0.0, "max": 1.0, "step": 0.1})}}
+    RETURN_TYPES = ("LATENT",)
+    CATEGORY = "tensor_ops"
+
+    FUNCTION = "latent_match"
+
+    @torch.no_grad()
+    def latent_match(self, source_latent, target_latent, strength=1.0):       
+        normalized_latent = match_normalize(target_latent["samples"], source_latent["samples"], strength, dimensions=4)
+
+        return_latent = source_latent.copy()
+        return_latent["samples"] = normalized_latent
+        return (return_latent,)
