@@ -1173,7 +1173,7 @@ class ModelSelect:
     CATEGORY = "advanced/model_merging"
 
     def select_model_and_clip(self, aa=None, bb=None, cc=None, dd=None, model=None, 
-                              aaclip=None, bbclip=None, ccclip=None, ddclip=None, modelclip=None):
+                              aaclip=None, bbclip=None, ccclip=None, ddclip=None, clip=None):
         # Check which model to return (aa > bb > cc > dd > model)
         selected_model = None
         if aa is not None:
