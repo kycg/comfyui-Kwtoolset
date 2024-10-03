@@ -1143,3 +1143,96 @@ class LatentMatch:
         return_latent = source_latent.copy()
         return_latent["samples"] = normalized_latent
         return (return_latent,)
+
+
+
+@register_node("KwtoolsetModelSelect", "KW Model Select")
+class ModelSelect:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "optional": {
+                "aa": ("MODEL",),  # Model aa input
+                "aaclip": ("CLIP",),  # CLIP aa input
+                "bb": ("MODEL",),  # Model bb input
+                "bbclip": ("CLIP",),  # CLIP bb input
+                "cc": ("MODEL",),  # Model cc input
+                "ccclip": ("CLIP",),  # CLIP cc input
+                "dd": ("MODEL",),  # Model dd input
+                "ddclip": ("CLIP",),  # CLIP dd input
+            },
+            "required": {
+                "model": ("MODEL",),  # Default model input
+                "clip": ("CLIP",),  # Default CLIP input
+            }
+        }
+
+    RETURN_TYPES = ("MODEL", "CLIP")
+    RETURN_NAMES = ("selected_model", "selected_clip")
+    FUNCTION = "select_model_and_clip"
+    CATEGORY = "advanced/model_merging"
+
+    def select_model_and_clip(self, aa=None, bb=None, cc=None, dd=None, model=None, 
+                              aaclip=None, bbclip=None, ccclip=None, ddclip=None, modelclip=None):
+        # Check which model to return (aa > bb > cc > dd > model)
+        selected_model = None
+        if aa is not None:
+            selected_model = aa
+            selected_clip = aaclip
+        elif bb is not None:
+            selected_model = bb
+            selected_clip = bbclip
+        elif cc is not None:
+            selected_model = cc
+            selected_clip = ccclip
+        elif dd is not None:
+            selected_model = dd
+            selected_clip = ddclip
+        elif model is not None:
+            selected_model = model
+            selected_clip = modelclip
+        else:
+            raise ValueError("No valid model provided. All model inputs are None.")
+
+        # Return the selected model and selected clip
+        return (selected_model, selected_clip)
+
+
+@register_node("KwtoolsetMaskAdd", "KW Mask Add")
+class MaskAdd:
+    @classmethod
+    def INPUT_TYPES(s):
+        return {
+            "required": {
+                "mask1": ("MASK",),  # Mask 1 (required)
+            },
+            "optional": {
+                "mask2": ("MASK",),  # Mask 2 (optional)
+                "mask3": ("MASK",),  # Mask 3 (optional)
+                "mask4": ("MASK",),  # Mask 4 (optional)
+                "mask5": ("MASK",),  # Mask 5 (optional)
+                "mask6": ("MASK",),  # Mask 6 (optional)
+            }
+        }
+
+    RETURN_TYPES = ("MASK",)
+    RETURN_NAMES = ("merged_mask",)
+    FUNCTION = "add_masks"
+    CATEGORY = "advanced/masking"
+
+    def add_masks(self, mask1=None, mask2=None, mask3=None, mask4=None, mask5=None, mask6=None):
+        # Gather all non-None masks, skipping any empty (None) masks
+        masks = [mask for mask in [mask1, mask2, mask3, mask4, mask5, mask6] if mask is not None]
+
+        # If no valid masks are provided, raise an error
+        if not masks:
+            raise ValueError("No valid masks provided. At least one mask must be non-None.")
+
+        # Start with the first non-None mask
+        merged_mask = masks[0]
+
+        # Add all subsequent masks together
+        for mask in masks[1:]:
+            merged_mask = torch.clamp(merged_mask + mask, 0, 255)
+
+        return (merged_mask,)
