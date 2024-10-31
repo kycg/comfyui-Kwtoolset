@@ -1273,3 +1273,98 @@ class ImageSelect:
             return (default_img,)
         else:
             raise ValueError("No valid image provided. All image inputs are None.")
+
+
+@register_node("KwtoolsetConditioningSelect", "KW Conditioning Select")
+class ConditioningSelect:
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "default_c": ("CONDITIONING",),  # Default conditioning input (required)
+            },
+            "optional": {
+                "conditioning_a": ("CONDITIONING",),  # Optional Conditioning A
+                "conditioning_b": ("CONDITIONING",),  # Optional Conditioning B
+                "conditioning_c": ("CONDITIONING",),  # Optional Conditioning C
+                "conditioning_d": ("CONDITIONING",),  # Optional Conditioning D
+            }
+        }
+
+    RETURN_TYPES = ("CONDITIONING",)
+    RETURN_NAMES = ("selected_conditioning",)
+    FUNCTION = "select_conditioning"
+    CATEGORY = "advanced/conditioning_processing"
+
+    def select_conditioning(self, default_c=None, conditioning_a=None, conditioning_b=None, conditioning_c=None, conditioning_d=None):
+        # Check which conditioning input to return (conditioning_a > conditioning_b > conditioning_c > conditioning_d > default_conditioning)
+        if conditioning_a is not None:
+            return (conditioning_a,)
+        elif conditioning_b is not None:
+            return (conditioning_b,)
+        elif conditioning_c is not None:
+            return (conditioning_c,)
+        elif conditioning_d is not None:
+            return (conditioning_d,)
+        elif default_conditioning is not None:
+            return (default_conditioning,)
+        else:
+            raise ValueError("No valid conditioning input provided. All inputs are None.")
+
+
+@register_node("KWImageResizeByLongerSide", "KW Image Resize by Longer Side")
+class ImageResizeByLongerSide:
+    CATEGORY = "kwimages"
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "image": ("IMAGE",),
+                "size": ("INT", {"default": 512, "min": 0, "step": 1, "max": 99999}),
+                "interpolation_mode": (
+                    ["bicubic", "bilinear", "nearest", "nearest exact"],
+                ),
+            }
+        }
+
+    RETURN_TYPES = ("IMAGE",)
+    RETURN_NAMES = ("resized_image",)
+    FUNCTION = "resize_image"
+
+    def resize_image(
+        self,
+        image: torch.Tensor,
+        size: int,
+        interpolation_mode: str,
+    ):
+        assert isinstance(image, torch.Tensor)
+        assert isinstance(size, int)
+        assert isinstance(interpolation_mode, str)
+
+        # Convert interpolation mode to the correct format for PyTorch
+        interpolation_mode = interpolation_mode.upper().replace(" ", "_")
+        interpolation_mode = getattr(InterpolationMode, interpolation_mode)
+
+        # Get the current image height and width
+        _, h, w, _ = image.shape
+
+        # Calculate new dimensions based on the longer side
+        if h >= w:
+            new_h = size
+            new_w = round(w * new_h / h)
+        else:
+            new_w = size
+            new_h = round(h * new_w / w)
+
+        # Adjust image for resizing and perform resize operation
+        image = image.permute(0, 3, 1, 2)
+        image = F.resize(
+            image,
+            (new_h, new_w),
+            interpolation=interpolation_mode,
+            antialias=True,
+        )
+        image = image.permute(0, 2, 3, 1)
+
+        return (image,)
