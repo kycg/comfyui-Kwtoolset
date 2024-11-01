@@ -664,7 +664,7 @@ class GetImageSize:
     RETURN_TYPES = ("INT", "INT","IMAGE")
     RETURN_NAMES = ("width", "height","image")
     FUNCTION = "execute"
-    CATEGORY = "image"
+    CATEGORY = "Kwtoolset/image"
 
     def execute(self, image):
         return (image.shape[2], image.shape[1],image)
@@ -1314,7 +1314,7 @@ class ConditioningSelect:
 
 @register_node("KWImageResizeByLongerSide", "KW Image Resize by Longer Side")
 class ImageResizeByLongerSide:
-    CATEGORY = "kwimages"
+    CATEGORY = "Kwtoolset/images"
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -1373,7 +1373,7 @@ class ImageResizeByLongerSide:
 
 @register_node("KWCivitAIDownloader", "KW CivitAI Downloader")
 class CivitAIDownloader:
-    CATEGORY = "loaders"
+    CATEGORY = "Kwtoolset/loaders"
 
     @classmethod
     def INPUT_TYPES(cls):
@@ -1477,3 +1477,67 @@ def get_model_dirs():
     models_dir = get_base_dir()
     model_dirs = [d for d in os.listdir(models_dir) if os.path.isdir(os.path.join(models_dir, d))]
     return model_dirs
+
+
+
+@register_node("KWShowAnything", "KW Show Anything")
+class ShowAnything:
+    CATEGORY = "Kwtoolset/Logic"
+    INPUT_IS_LIST = True
+    OUTPUT_NODE = True
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {},
+            "optional": {
+                "anything": ("ANY_TYPE", {}),
+            },
+            "hidden": {
+                "unique_id": "UNIQUE_ID",
+                "extra_pnginfo": "EXTRA_PNGINFO",
+            }
+        }
+
+    RETURN_TYPES = ("ANY_TYPE",)
+    RETURN_NAMES = ("output",)
+    FUNCTION = "log_input"
+
+    def log_input(
+        self,
+        unique_id=None,
+        extra_pnginfo=None,
+        **kwargs
+    ):
+        values = []
+        
+        # Process 'anything' parameter
+        if "anything" in kwargs:
+            for val in kwargs["anything"]:
+                try:
+                    if isinstance(val, str):
+                        values.append(val)
+                    else:
+                        val = json.dumps(val)  # Serialize non-string types to JSON
+                        values.append(str(val))
+                except Exception as e:
+                    print(f"Error serializing value {val}: {e}")
+                    values.append(str(val))
+
+        # Validate 'extra_pnginfo' content
+        if not extra_pnginfo:
+            print("Error: extra_pnginfo is empty")
+        elif not (isinstance(extra_pnginfo[0], dict) and "workflow" in extra_pnginfo[0]):
+            print("Error: extra_pnginfo[0] is not a dict or missing 'workflow' key")
+        else:
+            workflow = extra_pnginfo[0]["workflow"]
+            # Find the node by unique_id in the workflow nodes
+            node = next((x for x in workflow["nodes"] if str(x["id"]) == unique_id[0]), None)
+            if node:
+                node["widgets_values"] = [values]  # Update node's widget values with collected data
+
+        # Return formatted output
+        if isinstance(values, list) and len(values) == 1:
+            return {"ui": {"text": values}, "result": (values[0],)}
+        else:
+            return {"ui": {"text": values}, "result": (values,)}
