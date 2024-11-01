@@ -17,7 +17,7 @@ import logging
 from PIL import Image
 from matplotlib import cm
 from .open_pose.util import draw_bodypose, draw_handpose, draw_facepose, HWC3, resize_image
-import copy  # 用于深拷贝
+import copy  # deepcopy
 
 #from controlnet_aux.open_pose.util import draw_bodypose, draw_handpose, draw_facepose, HWC3, resize_image
 
@@ -739,11 +739,11 @@ def draw_pose(pose, H, W, draw_body=True, draw_hand=True, draw_face=True):
         canvas = draw_bodypose(canvas, candidate, subset)
 
     if draw_hand:
-        # 准备调试信息
+        # prepare debug_info
         debug_info = []
         debug_info.append("draw_hand_true" )
         debug_info.append("pose_keypoints:\n" + str(hands))
-        # 将调试信息写入文件
+        # write debug_info
         with open("debug_info_function.txt", "w") as f:
             f.write("\n\n".join(debug_info))
         
@@ -952,7 +952,7 @@ class KwtoolsetChangeOpenpose:
 
     def box_keypoints(self, pose_keypoint, LeftKnee_Vertical,LeftKnee_Horizontal,RightKnee_Vertical,RightKnee_Horizontal, Lefthand_Vertical, Lefthand_Horizontal,Righthand_Vertical,Righthand_Horizontal, Leftleg_Vertical, Leftleg_Horizontal,Rightleg_Vertical, Rightleg_Horizontal, image_width, image_height, person_number=0, hand_openpose=0, face_openpose=0):
     
-            # 准备调试信息
+        # 准备调试信息
         debug_info = []
 
 
@@ -1368,3 +1368,112 @@ class ImageResizeByLongerSide:
         image = image.permute(0, 2, 3, 1)
 
         return (image,)
+
+
+
+@register_node("KWCivitAIDownloader", "KW CivitAI Downloader")
+class CivitAIDownloader:
+    CATEGORY = "loaders"
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "save_dir": (get_model_dirs(),),
+            },
+            "optional": {
+                "ignore": ("BOOLEAN", {"default": False}),
+                "model_id": ("STRING", {"multiline": False, "default": "1234"}),
+                "token_id": ("STRING", {"multiline": False, "default": ""}),
+                "full_url": ("STRING", {"multiline": False, "default": ""}),
+            }
+        }
+
+    RETURN_TYPES = ()
+    FUNCTION = "download"
+    OUTPUT_NODE = True
+
+    def download(
+        self,
+        model_id: str,
+        token_id: str,
+        save_dir: str,
+        ignore: bool,
+        full_url: str,
+    ):
+        print("Downloading model from CivitAI")
+        print(f"\tModel ID: {model_id}")
+        print(f"\tToken ID: {token_id}")
+        print(f"\tFull URL: {full_url}")
+        print(f"\tSaving to directory: {save_dir}")
+        
+        # Initiate download if 'ignore' is not set
+        if not ignore:
+            download_cai(model_id, token_id, save_dir, full_url)
+        return {}
+
+def download_file_with_token(url, params=None, save_path='.'):
+    try:
+        # Request the URL with streaming enabled
+        with requests.get(url, params=params, stream=True) as response:
+            response.raise_for_status()
+            print(f"Downloading from {response.url}")
+
+            # Extract filename from headers if available
+            cd = response.headers.get('content-disposition')
+            filename = None
+            if cd:
+                filenames = re.findall('filename="(.+)"', cd)
+                if filenames:
+                    filename = filenames[0]
+
+            # Fallback to last URL part if filename not in headers
+            if not filename:
+                filename = url.split("/")[-1]
+
+            # Save content to specified path
+            file_path = os.path.join(save_path, filename)
+            with open(file_path, 'wb') as file:
+                for chunk in response.iter_content(chunk_size=8192):
+                    file.write(chunk)
+
+            print(f"Download successful: {file_path}")
+            return True
+
+    except HTTPError as http_err:
+        print(f'HTTP error occurred: {http_err}')
+    except Exception as err:
+        print(f'Error occurred: {err}')
+
+def download_cai(model_id, token, local_path, full_url):
+    directory_path = os.path.join(get_base_dir(), local_path)
+
+    # Ensure directory exists
+    if not os.path.exists(directory_path):
+        os.makedirs(directory_path, exist_ok=True)
+
+    # Determine URL for the request
+    if not full_url and not model_id:
+        print("Please provide either 'full_url' or 'model_id'.")
+        return
+
+    url = full_url if full_url else f'https://civitai.com/api/download/models/{model_id}'
+    params = {'token': token} if token else {}
+
+    # Start the download
+    download_success = download_file_with_token(url, params, directory_path)
+    if download_success:
+        print("File downloaded successfully.")
+    else:
+        print("Download failed.")
+
+def get_base_dir():
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
+    models_dir = os.path.join(base_dir, 'models')
+    return models_dir
+
+def get_model_dirs():
+    models_dir = get_base_dir()
+    model_dirs = [d for d in os.listdir(models_dir) if os.path.isdir(os.path.join(models_dir, d))]
+    return model_dirs
