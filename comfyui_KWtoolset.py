@@ -1471,72 +1471,83 @@ def get_base_dir():
     current_dir = os.path.dirname(os.path.abspath(__file__))
     base_dir = os.path.dirname(os.path.dirname(os.path.dirname(current_dir)))
     models_dir = os.path.join(base_dir, 'models')
-    return models_dir
+    return base_dir
 
 def get_model_dirs():
-    models_dir = get_base_dir()
+    models_dir =  os.path.join(folder_paths.base_path, 'models')
+    
+    # 检查 models_dir 是否存在
+    if not os.path.exists(models_dir):
+        print(f"Warning: Models directory '{models_dir}' does not exist.")
+        return []  # 返回空列表以避免错误
+
+    # 列出 models_dir 中的子目录
     model_dirs = [d for d in os.listdir(models_dir) if os.path.isdir(os.path.join(models_dir, d))]
     return model_dirs
 
 
-
 @register_node("KWShowAnything", "KW Show Anything")
 class ShowAnything:
-    CATEGORY = "Kwtoolset/Logic"
-    INPUT_IS_LIST = True
-    OUTPUT_NODE = True
+    CATEGORY = "Kwtoolset/Logic"  # 将节点分类到“Kwtoolset/Logic”中
+    INPUT_IS_LIST = True  # 允许输入为列表
+    OUTPUT_NODE = True  # 该节点会生成输出
+
+    # 定义内部类 AlwaysEqualProxy，使得类内类型定义与处理一致
+    class AlwaysEqualProxy(str):
+        def __eq__(self, _):
+            return True
+
+    # 使用内部的 AlwaysEqualProxy 定义一个可以匹配任意类型的 `any_type`
+    any_type = AlwaysEqualProxy("*")
 
     @classmethod
     def INPUT_TYPES(cls):
+        # 定义输入类型
         return {
             "required": {},
             "optional": {
-                "anything": ("ANY_TYPE", {}),
+                "anything": (cls.any_type, {}),  # 可选参数“anything”，允许任意类型的输入
             },
             "hidden": {
-                "unique_id": "UNIQUE_ID",
-                "extra_pnginfo": "EXTRA_PNGINFO",
+                "unique_id": "UNIQUE_ID",  # 隐藏参数“unique_id”
+                "extra_pnginfo": "EXTRA_PNGINFO",  # 隐藏参数“extra_pnginfo”，包含工作流信息
             }
         }
 
-    RETURN_TYPES = ("ANY_TYPE",)
+    # 定义输出类型和名称，使用 cls.any_type 来引用类变量
+    RETURN_TYPES = (any_type,)
     RETURN_NAMES = ("output",)
-    FUNCTION = "log_input"
+    FUNCTION = "log_input"  # 设置主处理函数为“log_input”
 
-    def log_input(
-        self,
-        unique_id=None,
-        extra_pnginfo=None,
-        **kwargs
-    ):
-        values = []
-        
-        # Process 'anything' parameter
+    def log_input(self, unique_id=None, extra_pnginfo=None, **kwargs):
+        values = []  # 初始化一个列表用于存储处理过的“anything”参数
+
+        # 处理“anything”参数
         if "anything" in kwargs:
             for val in kwargs["anything"]:
                 try:
                     if isinstance(val, str):
-                        values.append(val)
+                        values.append(val)  # 如果是字符串，直接添加
                     else:
-                        val = json.dumps(val)  # Serialize non-string types to JSON
+                        val = json.dumps(val)  # 非字符串类型序列化为JSON
                         values.append(str(val))
                 except Exception as e:
                     print(f"Error serializing value {val}: {e}")
-                    values.append(str(val))
+                    values.append(str(val))  # 如果序列化失败，记录错误并添加值
 
-        # Validate 'extra_pnginfo' content
+        # 验证“extra_pnginfo”内容
         if not extra_pnginfo:
             print("Error: extra_pnginfo is empty")
         elif not (isinstance(extra_pnginfo[0], dict) and "workflow" in extra_pnginfo[0]):
             print("Error: extra_pnginfo[0] is not a dict or missing 'workflow' key")
         else:
             workflow = extra_pnginfo[0]["workflow"]
-            # Find the node by unique_id in the workflow nodes
+            # 根据unique_id查找节点
             node = next((x for x in workflow["nodes"] if str(x["id"]) == unique_id[0]), None)
             if node:
-                node["widgets_values"] = [values]  # Update node's widget values with collected data
+                node["widgets_values"] = [values]  # 更新节点的widget值
 
-        # Return formatted output
+        # 格式化输出
         if isinstance(values, list) and len(values) == 1:
             return {"ui": {"text": values}, "result": (values[0],)}
         else:
